@@ -125,6 +125,17 @@ class StableST(nn.Module):
         self.optimizer_mi_net=torch.optim.Adam(self.mi_net.parameters(),lr=args.lr_init)
 
         self.mae = masked_mae_loss(mask_value=5.0)
+        
+        self.generator_conv=nn.Conv2d(in_channels=args.input_length,
+                                       out_channels=1,
+                                       kernel_size=(1, 1),
+                                       bias=True)
+        self.linear_c = nn.Sequential(
+            nn.Linear(2,embed_size),
+            nn.ReLU(),
+            nn.Linear(embed_size,2),
+            nn.Sigmoid()
+        )
 
 
     def forward(self, x):
@@ -157,16 +168,12 @@ class StableST(nn.Module):
         out_2 = self.variant_predict_conv_2(out_2)  # out shape: [b, c, N, t]
         out_2 = out_2.permute(0,3,2,1)
 
-        # todolist change
-        # x=x.permute(0,2,3,1)#nclv
-        # c=self.generator_conv(x) # b，1，n，2
-        # out_c = self.linear_c(c)
-        # out_2 = out_2*out_c
-        
-        # self.out_c=out_c
+        alpha=self.generator_conv(x)
+        alpha=self.linear_c(alpha)
+        out_2 = alpha*out_2
 
-        # out =torch.cat([out_1,out_2],dim=1).permute(0,2,3,1)
-        # out = self.out_mlp(out).squeeze()
+        out_1 = (1-alpha)*out_1
+        
         out = out_2 + out_1
         out = out.squeeze(1)
         out_1=out_1.squeeze(1)
